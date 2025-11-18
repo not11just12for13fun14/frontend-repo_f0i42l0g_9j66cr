@@ -1,68 +1,93 @@
+import { useState } from 'react'
+import CompanyForm from './components/CompanyForm'
+import InterviewFlow from './components/InterviewFlow'
+import Results from './components/Results'
+
 function App() {
+  const [interview, setInterview] = useState(null)
+  const [result, setResult] = useState(null)
+  const [opps, setOpps] = useState([])
+  const [proposal, setProposal] = useState(null)
+  const baseUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'
+
+  const startInterview = async (company) => {
+    const res = await fetch(`${baseUrl}/api/interview/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ company })
+    })
+    if (!res.ok) throw new Error('Failed to start interview')
+    const data = await res.json()
+    setInterview({ id: data.interview_id, questions: data.questions })
+    setOpps(data.opportunities)
+  }
+
+  const submitAnswers = async (answers) => {
+    if (!interview) return
+    const res = await fetch(`${baseUrl}/api/interview/submit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ interview_id: interview.id, answers })
+    })
+    if (!res.ok) throw new Error('Failed to evaluate interview')
+    const data = await res.json()
+    setResult(data)
+  }
+
+  const generateProposal = async (idx) => {
+    const res = await fetch(`${baseUrl}/api/proposal/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ interview_id: interview?.id, chosen_opportunity_index: idx })
+    })
+    if (!res.ok) throw new Error('Failed to generate proposal')
+    const data = await res.json()
+    setProposal(data)
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      {/* Subtle pattern overlay */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(59,130,246,0.05),transparent_50%)]"></div>
 
       <div className="relative min-h-screen flex items-center justify-center p-8">
-        <div className="max-w-2xl w-full">
-          {/* Header with Flames icon */}
-          <div className="text-center mb-12">
-            <div className="inline-flex items-center justify-center mb-6">
-              <img
-                src="/flame-icon.svg"
-                alt="Flames"
-                className="w-24 h-24 drop-shadow-[0_0_25px_rgba(59,130,246,0.5)]"
-              />
-            </div>
-
-            <h1 className="text-5xl font-bold text-white mb-4 tracking-tight">
-              Flames Blue
-            </h1>
-
-            <p className="text-xl text-blue-200 mb-6">
-              Build applications through conversation
-            </p>
-          </div>
-
-          {/* Instructions */}
-          <div className="bg-slate-800/50 backdrop-blur-sm border border-blue-500/20 rounded-2xl p-8 shadow-xl mb-6">
-            <div className="flex items-start gap-4 mb-6">
-              <div className="flex-shrink-0 w-8 h-8 bg-blue-500 text-white rounded-lg flex items-center justify-center font-bold">
-                1
-              </div>
-              <div>
-                <h3 className="font-semibold text-white mb-1">Describe your idea</h3>
-                <p className="text-blue-200/80 text-sm">Use the chat panel on the left to tell the AI what you want to build</p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-4 mb-6">
-              <div className="flex-shrink-0 w-8 h-8 bg-blue-500 text-white rounded-lg flex items-center justify-center font-bold">
-                2
-              </div>
-              <div>
-                <h3 className="font-semibold text-white mb-1">Watch it build</h3>
-                <p className="text-blue-200/80 text-sm">Your app will appear in this preview as the AI generates the code</p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-4">
-              <div className="flex-shrink-0 w-8 h-8 bg-blue-500 text-white rounded-lg flex items-center justify-center font-bold">
-                3
-              </div>
-              <div>
-                <h3 className="font-semibold text-white mb-1">Refine and iterate</h3>
-                <p className="text-blue-200/80 text-sm">Continue the conversation to add features and make changes</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Footer */}
+        <div className="max-w-4xl w-full space-y-6">
           <div className="text-center">
-            <p className="text-sm text-blue-300/60">
-              No coding required • Just describe what you want
-            </p>
+            <h1 className="text-4xl font-bold text-white tracking-tight">AI-Powered EU Funding Vetting</h1>
+            <p className="text-blue-200 mt-2">Interview companies, match to calls, predict fit, and generate proposal outlines.</p>
+          </div>
+
+          {!interview && (
+            <CompanyForm onStart={startInterview} />
+          )}
+
+          {interview && !result && (
+            <InterviewFlow interview={interview} onSubmit={submitAnswers} />
+          )}
+
+          {result && (
+            <Results result={result} opportunities={opps} onGenerate={generateProposal} />
+          )}
+
+          {proposal && (
+            <div className="bg-slate-800/60 border border-blue-500/20 rounded-2xl p-6 space-y-3">
+              <h3 className="text-white font-semibold text-lg">Proposal Draft</h3>
+              <p className="text-blue-200">Opportunity: <a className="text-blue-400 hover:underline" href={proposal.opportunity_url} target="_blank" rel="noreferrer">{proposal.opportunity_title}</a></p>
+              <div className="space-y-2">
+                {Object.entries(proposal.outline || {}).map(([k, v]) => (
+                  <div key={k} className="bg-slate-900/60 border border-slate-700 rounded p-3">
+                    <p className="text-white font-medium">{k}</p>
+                    <p className="text-blue-200/90 text-sm">{v}</p>
+                  </div>
+                ))}
+              </div>
+              {proposal.research_notes && (
+                <p className="text-blue-300/80 text-sm">{proposal.research_notes}</p>
+              )}
+            </div>
+          )}
+
+          <div className="text-center">
+            <a href="/test" className="text-blue-400 hover:underline text-sm">Check backend connection</a>
           </div>
         </div>
       </div>
